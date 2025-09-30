@@ -1,0 +1,20 @@
+{
+    "year": "2021",
+    "category": "新一卷",
+    "question_number": "2",
+    "tags": "",
+    "query": "2021年新高考I卷第2题考了什么",
+    "relevant_docs": ["3427dfff-f2a9-4071-a75a-35aba00d1e24"]
+  },
+
+{
+    "year": "2018",
+    "category": "",
+    "question_number": "2018",
+    "query": "导数",
+    "query": "2018年导数考了哪些内容",
+    "relevant_docs": ["de035532-4765-402d-b7c8-b89edc6d6eb8", 
+                      "25d174a9-edda-4065-82c3-160edc469bd1",
+                      "0e847a73-45df-42e0-bd00-b1a61dc18fd6",
+                      "3ed5a841-0ef1-4db2-8e95-efc650fe7b99"]
+  }

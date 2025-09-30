@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高考数学题目查询</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React and ReactDOM -->
+    <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.22.9/babel.min.js"></script>
+    <!-- KaTeX for LaTeX rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div id="root" className="w-full max-w-5xl p-6"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const App = () => {
+            // 状态管理
+            const [year, setYear] = useState('');
+            const [category, setCategory] = useState('');
+            const [questionNumber, setQuestionNumber] = useState('');
+            const [additionalQuestion, setAdditionalQuestion] = useState('');
+            const [query, setQuery] = useState('');
+            const [categories, setCategories] = useState([]);
+            const [response, setResponse] = useState('');
+            const [chatHistory, setChatHistory] = useState([]);
+            const [sessionId, setSessionId] = useState(null);
+            const [isLoading, setIsLoading] = useState(false);
+            const [error, setError] = useState('');
+
+            // 主题关键词（与后端同步）
+            const TOPIC_KEYWORDS = {
+                "集合": ["集合", "并集", "交集", "补集", "子集", "全集"],
+                "立体几何": ["立体几何", "棱柱", "棱锥", "球", "体积", "表面积", "截面", "线面角", "二面角"],
+                "平面向量": ["平面向量", "向量", "夹角", "单位向量"],
+                "函数与导数": ["函数", "单调性", "导数", "极值", "拐点", "对称性", "周期性", "奇偶性", "最小值", "最大值", "最值"],
+                "三角函数": ["三角函数", "正弦", "余弦", "正切", "弧度", "周期"],
+                "数列": ["数列", "等差", "等比", "递推", "通项", "求和"],
+                "概率统计": ["概率", "统计", "期望", "方差", "分布", "随机变量"],
+                "解析几何": ["解析几何", "圆锥曲线", "椭圆", "双曲线", "抛物线", "焦点", "准线", "渐近线", "圆", "轨迹", "距离", "斜率"],
+                "不等式": ["不等式", "均值不等式", "柯西", "绝对值", "解不等式"],
+                "复数": ["复数", "共轭", "复平面"]
+            };
+
+            // 获取类别列表
+            useEffect(() => {
+                fetch('http://localhost:5000/api/categories', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                    .then(res => {
+                        if (!res.ok) throw new Error(`HTTP 错误: ${res.status}`);
+                        return res.json();
+                    })
+                    .then(data => {
+                        setCategories(data.categories || []);
+                        console.log('获取类别:', data.categories);
+                    })
+                    .catch(err => {
+                        setError('加载类别失败：' + err.message);
+                        console.error('获取类别错误:', err);
+                    });
+            }, []);
+
+            // 渲染 LaTeX
+            const renderLatex = (text) => {
+                try {
+                    const container = document.createElement('div');
+                    container.innerHTML = text.replace(/\n/g, '<br>');
+                    renderMathInElement(container, {
+                        delimiters: [
+                            { left: "$$", right: "$$", display: true },
+                            { left: "\\[", right: "\\]", display: true },
+                            { left: "$", right: "$", display: false },
+                            { left: "\\(", right: "\\)", display: false }
+                        ],
+                        throwOnError: false
+                    });
+                    return container.innerHTML;
+                } catch (err) {
+                    console.error('LaTeX 渲染错误:', err);
+                    return text; // 回退到原始文本
+                }
+            };
+
+            // 处理查询提交
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!year && !category && !questionNumber) {
+                    setError('请至少提供年份、类别或题号之一');
+                    return;
+                }
+                setIsLoading(true);
+                setError('');
+
+                const queryData = {
+                    year_in_query: year,
+                    category_in_query: category,
+                    question_number: questionNumber,
+                    additional_question: additionalQuestion,
+                    query: query || '这道题考察了什么，生成一道类似的题目',
+                    session_id: sessionId
+                };
+
+                console.log('发送查询:', queryData);
+
+                fetch('http://localhost:5000/api/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(queryData)
+                })
+                    .then(res => {
+                        if (!res.ok) throw new Error(`HTTP 错误: ${res.status}`);
+                        return res.json();
+                    })
+                    .then(data => {
+                        setIsLoading(false);
+                        console.log('查询响应:', data);
+                        if (data.status === 'success') {
+                            setResponse(data.response);
+                            setSessionId(data.session_id);
+                            setChatHistory([...chatHistory, {
+                                query: `${year}${category}第${questionNumber}题：${query}${additionalQuestion ? `（类别：${additionalQuestion}）` : ''}`,
+                                response: data.response
+                            }]);
+                        } else {
+                            setError(data.response || '查询失败');
+                        }
+                    })
+                    .catch(err => {
+                        setIsLoading(false);
+                        setError('查询失败：' + err.message);
+                        console.error('查询错误:', err);
+                    });
+            };
+
+            // 清空输入
+            const handleClear = () => {
+                setYear('');
+                setCategory('');
+                setQuestionNumber('');
+                setAdditionalQuestion('');
+                setQuery('');
+                setResponse('');
+                setError('');
+                setChatHistory([]);
+                setSessionId(null);
+            };
+
+            return (
+                <div className="bg-white shadow-xl rounded-lg p-8">
+                    <h1 className="text-3xl font-bold text-center mb-8 text-indigo-600">高考数学题目查询</h1>
+                    
+                    {/* 输入表单 */}
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">年份</label>
+                                <input
+                                    type="text"
+                                    value={year}
+                                    onChange={(e) => setYear(e.target.value)}
+                                    placeholder="如 2023年"
+                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">类别</label>
+                                <select
+                                    value={category}
+                                    onChange={(e) => setCategory(e.target.value)}
+                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
+                                >
+                                    <option value="">选择类别</option>
+                                    {categories.map(cat => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">题号</label>
+                                <input
+                                    type="text"
+                                    value={questionNumber}
+                                    onChange={(e) => setQuestionNumber(e.target.value)}
+                                    placeholder="如 1"
+                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">题目类别</label>
+                            <select
+                                value={additionalQuestion}
+                                onChange={(e) => setAdditionalQuestion(e.target.value)}
+                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
+                            >
+                                <option value="">选择题目类别</option>
+                                {Object.keys(TOPIC_KEYWORDS).map(topic => (
+                                    <option key={topic} value={topic}>{topic}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">具体问题</label>
+                            <textarea
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                placeholder="如：这道题考察了什么？"
+                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
+                                rows="4"
+                            ></textarea>
+                        </div>
+                        <div className="flex space-x-4">
+                            <button
+                                type="submit"
+                                disabled={isLoading}
+                                className={`flex-1 py-3 px-6 rounded-md text-white font-medium ${isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                            >
+                                {isLoading ? '查询中...' : '提交查询'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleClear}
+                                className="flex-1 py-3 px-6 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium"
+                            >
+                                清空
+                            </button>
+                        </div>
+                    </form>
+
+                    {/* 错误提示 */}
+                    {error && (
+                        <div className="mt-6 p-4 bg-red-100 text-red-700 rounded-md text-center">
+                            {error}
+                        </div>
+                    )}
+
+                    {/* 对话历史 */}
+                    {chatHistory.length > 0 && (
+                        <div className="mt-8">
+                            <h2 className="text-xl font-semibold mb-4 text-gray-800">对话历史</h2>
+                            <div className="space-y-6 max-h-96 overflow-y-auto p-6 bg-gray-50 rounded-md border border-gray-200">
+                                {chatHistory.map((item, index) => (
+                                    <div key={index} className="border-b border-gray-200 pb-4 last:border-b-0">
+                                        <p className="font-medium text-gray-800 mb-2">用户: {item.query}</p>
+                                        <div
+                                            className="text-gray-600 leading-relaxed"
+                                            dangerouslySetInnerHTML={{ __html: renderLatex(item.response) }}
+                                        ></div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 当前响应 */}
+                    {response && (
+                        <div className="mt-8">
+                            <h2 className="text-xl font-semibold mb-4 text-gray-800">查询结果</h2>
+                            <div
+                                className="p-6 bg-gray-50 rounded-md border border-gray-200 text-gray-600 leading-relaxed"
+                                dangerouslySetInnerHTML={{ __html: renderLatex(response) }}
+                            ></div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
